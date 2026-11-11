@@ -1,0 +1,12 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: clearaccess
+      POSTGRES_USER: clearaccess
+      POSTGRES_PASSWORD: clearaccess
+    ports: ["5433:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clearaccess"]
+      interval: 3s
+      retries: 15
