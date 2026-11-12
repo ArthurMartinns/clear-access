@@ -6,7 +6,12 @@ services:
       POSTGRES_USER: clearaccess
       POSTGRES_PASSWORD: clearaccess
     ports: ["5433:5432"]
+    volumes:
+      - clearaccess_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U clearaccess"]
       interval: 3s
       retries: 15
+
+volumes:
+  clearaccess_data:
