@@ -2,3 +2,5 @@
 **/dist/
 **/target/
 .env
+.taste-skill/
+**/*.tsbuildinfo

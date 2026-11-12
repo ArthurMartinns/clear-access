@@ -1,4 +1,6 @@
 import { checkUrl, InvalidTargetError } from "./network.mjs";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 
 let browser;
 
@@ -7,10 +9,16 @@ try {
     allowDemo: process.env.CLEARACCESS_DEMO === "1",
   });
 
-  const [{ chromium }, { default: AxeBuilder }] = await Promise.all([
-    import("playwright"),
-    import("@axe-core/playwright"),
-  ]);
+  const [{ chromium }, { default: AxeBuilder }, { default: axe }] =
+    await Promise.all([
+      import("playwright"),
+      import("@axe-core/playwright"),
+      import("axe-core"),
+    ]);
+  const require = createRequire(import.meta.url);
+  const locale = JSON.parse(
+    readFileSync(require.resolve("axe-core/locales/pt_BR.json"), "utf8"),
+  );
 
   browser = await chromium.launch({ headless: true });
 
@@ -50,9 +58,12 @@ try {
     allowDemo: process.env.CLEARACCESS_DEMO === "1",
   });
 
-  const axe = await new AxeBuilder({ page }).analyze();
+  const results = await new AxeBuilder({
+    page,
+    axeSource: `${axe.source}\naxe.configure({ locale: ${JSON.stringify(locale)} });`,
+  }).analyze();
 
-  const issues = axe.violations.flatMap((violation) =>
+  const issues = results.violations.flatMap((violation) =>
     violation.nodes.map((node) => ({
       ruleId: violation.id,
       impact: violation.impact ?? "moderate",
@@ -78,8 +89,8 @@ try {
       url: page.url(),
       title: await page.title(),
       issues,
-      needsManualReview: axe.incomplete.length,
-      checkedRules: axe.passes.length,
+      needsManualReview: results.incomplete.length,
+      checkedRules: results.passes.length,
       analyzedAt: new Date().toISOString(),
     }),
   );

@@ -4,14 +4,14 @@ O ClearAccess analisa a acessibilidade de páginas públicas e apresenta os prob
 
 ## Estado atual
 
-A API Spring Boot recebe uma URL em `POST /api/analyses`. Um worker Node abre a página com Chromium, executa o axe-core e devolve os problemas encontrados. A análise é síncrona e tem limite de 60 segundos. O endpoint `GET /api/health` verifica se a API está ativa.
+A interface React recebe a URL, mostra o andamento e apresenta o relatório com contagens, filtros por impacto, busca e detalhes de cada problema. A API Spring Boot recebe a URL em `POST /api/analyses`. Um worker Node abre a página com Chromium, executa o axe-core e devolve os problemas encontrados. A análise é síncrona e tem limite de 60 segundos. O endpoint `GET /api/health` verifica se a API está ativa.
 
-Ainda não há interface, histórico ou banco conectado. A análise automatizada não substitui uma revisão manual de acessibilidade.
+Ainda não há histórico ou banco conectado. As regras do axe-core são apresentadas em português. A análise automatizada não substitui uma revisão manual de acessibilidade.
 
 ## Requisitos
 
 - Java 21 e Maven 3.9+
-- Node.js 20+
+- Node.js 20.19+ ou 22.12+
 - Chromium instalado pelo Playwright
 
 ## Instalação
@@ -31,6 +31,16 @@ mvn test
 mvn spring-boot:run
 ```
 
+Em um terceiro terminal, inicie a interface:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Acesse `http://localhost:5173`. O Vite encaminha as chamadas `/api` para a API local na porta 8080. Para verificar a versão de produção da interface, execute `npm run build` em `frontend/`.
+
 O caminho do worker é relativo ao diretório de execução da API. Caso inicie a API de outro diretório, configure `clearaccess.worker.script` com o caminho absoluto de `worker/analyze.mjs`.
 
 ## Usar a API
@@ -45,8 +55,8 @@ O worker bloqueia destinos locais e endereços reservados, inclusive em redireci
 
 ## Próximos incrementos
 
-1. Interface React e TypeScript para enviar uma URL e consultar os resultados.
-2. Persistência das análises no PostgreSQL com migrações versionadas.
-3. Histórico, comparação e páginas de demonstração.
+1. Persistência das análises no PostgreSQL com migrações versionadas.
+2. Histórico, comparação e páginas de demonstração.
+3. Preparação de uma implantação com isolamento de rede para o navegador.
 
 O `compose.yaml` já contém a configuração inicial do PostgreSQL, mas o banco ainda não é usado. A primeira versão não depende de IA ou de ferramentas pagas.
