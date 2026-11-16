@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "test:e2e": "node --test e2e/*.mjs"
   },
   "dependencies": {
     "@axe-core/playwright": "^4.10.2",
