@@ -1,4 +1,5 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { compareIssues } from "./compare";
 
 type Impact = "critical" | "serious" | "moderate" | "minor";
 
@@ -16,6 +17,7 @@ type Issue = {
 };
 
 type Analysis = {
+  id: string;
   url: string;
   title: string;
   issues: Issue[];
@@ -23,6 +25,44 @@ type Analysis = {
   checkedRules: number;
   analyzedAt: string;
 };
+
+type AnalysisSummary = {
+  id: string;
+  url: string;
+  title: string;
+  analyzedAt: string;
+  issueCount: number;
+  needsManualReview: number;
+  checkedRules: number;
+};
+
+async function readResponse<T>(response: Response): Promise<T> {
+  if (response.status === 204) return null as T;
+  const body = await response.json();
+  if (!response.ok) {
+    throw new Error(body?.error || "Não foi possível carregar os dados.");
+  }
+  return body as T;
+}
+
+function reportIdFromUrl() {
+  return new URL(window.location.href).searchParams.get("analysis");
+}
+
+function setReportUrl(id: string | null) {
+  const next = new URL(window.location.href);
+  if (id) next.searchParams.set("analysis", id);
+  else next.searchParams.delete("analysis");
+  window.history.pushState({}, "", next);
+}
+
+function demoUrl() {
+  const origin = new URL(window.location.origin);
+  if (origin.hostname === "127.0.0.1" && origin.port === "5173") {
+    origin.hostname = "localhost";
+  }
+  return new URL("/demo/broken.html", origin).href;
+}
 
 const impacts: { id: Impact; label: string }[] = [
   { id: "critical", label: "Crítico" },
@@ -66,10 +106,109 @@ function formatDate(value: string) {
 export default function App() {
   const [url, setUrl] = useState("");
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(reportIdFromUrl);
+  const [history, setHistory] = useState<AnalysisSummary[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [previous, setPrevious] = useState<Analysis | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [comparisonError, setComparisonError] = useState("");
+  const requestSequence = useRef(0);
   const [filter, setFilter] = useState<Impact | "all">("all");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  async function loadHistory() {
+    setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      setHistory(
+        await readResponse<AnalysisSummary[]>(await fetch("/api/analyses")),
+      );
+    } catch (cause) {
+      setHistoryError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível carregar o histórico.",
+      );
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function loadReport(id: string | null, known?: Analysis) {
+    const sequence = ++requestSequence.current;
+    setSelectedId(id);
+    setPrevious(null);
+    setComparisonError("");
+    setError("");
+    setFilter("all");
+    setQuery("");
+    if (!id) {
+      setAnalysis(null);
+      setReportLoading(false);
+      setComparisonLoading(false);
+      return;
+    }
+    setAnalysis(known ?? null);
+    setReportLoading(!known);
+    try {
+      const result =
+        known ??
+        (await readResponse<Analysis>(
+          await fetch(`/api/analyses/${encodeURIComponent(id)}`),
+        ));
+      if (sequence !== requestSequence.current) return;
+      setAnalysis(result);
+      setReportLoading(false);
+      setComparisonLoading(true);
+      try {
+        const prior = await readResponse<Analysis | null>(
+          await fetch(`/api/analyses/${encodeURIComponent(id)}/previous`),
+        );
+        if (sequence === requestSequence.current) setPrevious(prior);
+      } catch (cause) {
+        if (sequence === requestSequence.current) {
+          setComparisonError(
+            cause instanceof Error
+              ? cause.message
+              : "Não foi possível carregar a comparação.",
+          );
+        }
+      } finally {
+        if (sequence === requestSequence.current) setComparisonLoading(false);
+      }
+    } catch (cause) {
+      if (sequence === requestSequence.current) {
+        setReportLoading(false);
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Não foi possível carregar o relatório.",
+        );
+      }
+    }
+  }
+
+  useEffect(() => {
+    void loadHistory();
+    void loadReport(reportIdFromUrl());
+    const onPopState = () => {
+      void loadReport(reportIdFromUrl());
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      requestSequence.current++;
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, []);
+
+  function openReport(id: string | null) {
+    setReportUrl(id);
+    void loadReport(id);
+  }
 
   const counts = useMemo(() => {
     const values = Object.fromEntries(
@@ -108,17 +247,10 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: url.trim() }),
       });
-      const body: Analysis | { error?: string } = await response.json();
-      if (!response.ok) {
-        throw new Error(
-          "error" in body && body.error
-            ? body.error
-            : "Não foi possível analisar a página.",
-        );
-      }
-      setAnalysis(body as Analysis);
-      setFilter("all");
-      setQuery("");
+      const body = await readResponse<Analysis>(response);
+      setReportUrl(body.id);
+      void loadReport(body.id, body);
+      void loadHistory();
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -133,6 +265,10 @@ export default function App() {
   const uniqueRules = analysis
     ? new Set(analysis.issues.map((issue) => issue.ruleId)).size
     : 0;
+  const comparison =
+    analysis && previous
+      ? compareIssues(analysis.issues, previous.issues)
+      : null;
 
   return (
     <div className="app-frame">
@@ -177,10 +313,35 @@ export default function App() {
                 A análise pode levar até um minuto. Use uma página pública com
                 HTTP ou HTTPS.
               </p>
+              <p className="demo-help">
+                Quer experimentar?{" "}
+                <button
+                  type="button"
+                  className="inline-action"
+                  onClick={() => setUrl(demoUrl())}
+                >
+                  Usar página de demonstração
+                </button>
+                <span aria-hidden="true"> · </span>
+                <a
+                  href="/demo/fixed.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Ver versão corrigida
+                </a>
+                {window.location.port === "5173" && (
+                  <span className="demo-local-note">
+                    No ambiente local, ative CLEARACCESS_DEMO=1 na API.
+                  </span>
+                )}
+              </p>
             </form>
-            {loading && (
+            {(loading || reportLoading) && (
               <p className="status-message" role="status">
-                Abrindo a página e verificando seus elementos…
+                {loading
+                  ? "Abrindo a página e verificando seus elementos…"
+                  : "Carregando relatório salvo…"}
               </p>
             )}
             {error && (
@@ -211,6 +372,13 @@ export default function App() {
                     </time>
                   </p>
                 </div>
+                <button
+                  className="text-action"
+                  type="button"
+                  onClick={() => openReport(null)}
+                >
+                  Novo relatório
+                </button>
               </div>
 
               <div className="summary" aria-label="Resumo da análise">
@@ -231,6 +399,60 @@ export default function App() {
                   <strong>{analysis.checkedRules}</strong>
                 </div>
               </div>
+
+              <section
+                className="comparison"
+                aria-labelledby="comparison-title"
+              >
+                <div className="comparison-heading">
+                  <div>
+                    <h3 id="comparison-title">Desde a análise anterior</h3>
+                    {previous && (
+                      <p>Mesmo endereço · {formatDate(previous.analyzedAt)}</p>
+                    )}
+                  </div>
+                  {previous && (
+                    <button
+                      type="button"
+                      className="text-action"
+                      onClick={() => openReport(previous.id)}
+                    >
+                      Abrir anterior
+                    </button>
+                  )}
+                </div>
+                {comparisonLoading ? (
+                  <p role="status">Carregando comparação…</p>
+                ) : comparisonError ? (
+                  <p role="alert">
+                    {comparisonError}{" "}
+                    <button
+                      type="button"
+                      className="inline-action"
+                      onClick={() => void loadReport(analysis.id)}
+                    >
+                      Tentar novamente
+                    </button>
+                  </p>
+                ) : comparison ? (
+                  <div className="comparison-values">
+                    <div>
+                      <strong>{comparison.added.length}</strong>
+                      <span>novas ocorrências</span>
+                    </div>
+                    <div>
+                      <strong>{comparison.resolved}</strong>
+                      <span>resolvidas</span>
+                    </div>
+                    <div>
+                      <strong>{comparison.unchanged}</strong>
+                      <span>persistentes</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p>Esta é a primeira análise salva deste endereço.</p>
+                )}
+              </section>
 
               <div className="findings-heading">
                 <div>
@@ -369,6 +591,71 @@ export default function App() {
               </dl>
             </section>
           )}
+          <section className="history" aria-labelledby="history-title">
+            <div className="history-heading">
+              <div>
+                <h2 id="history-title">Histórico recente</h2>
+                <p>Até 20 análises salvas, da mais recente à mais antiga.</p>
+              </div>
+              <button
+                type="button"
+                className="text-action"
+                onClick={() => void loadHistory()}
+                disabled={historyLoading}
+              >
+                Atualizar
+              </button>
+            </div>
+            {historyLoading && history.length === 0 ? (
+              <p role="status">Carregando histórico…</p>
+            ) : historyError ? (
+              <p role="alert">
+                {historyError}{" "}
+                <button
+                  type="button"
+                  className="inline-action"
+                  onClick={() => void loadHistory()}
+                >
+                  Tentar novamente
+                </button>
+              </p>
+            ) : history.length === 0 ? (
+              <p className="history-empty">
+                As análises concluídas aparecerão aqui.
+              </p>
+            ) : (
+              <ul className="history-list">
+                {history.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      className={
+                        selectedId === item.id
+                          ? "history-item selected"
+                          : "history-item"
+                      }
+                      aria-current={selectedId === item.id ? "page" : undefined}
+                      onClick={() => openReport(item.id)}
+                    >
+                      <span className="history-page">
+                        <strong>{item.title || item.url}</strong>
+                        <small>{item.url}</small>
+                      </span>
+                      <span className="history-meta">
+                        <time dateTime={item.analyzedAt}>
+                          {formatDate(item.analyzedAt)}
+                        </time>
+                        <span>
+                          {item.issueCount}{" "}
+                          {item.issueCount === 1 ? "ocorrência" : "ocorrências"}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
       </main>
     </div>
