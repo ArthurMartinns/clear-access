@@ -2,6 +2,12 @@ import dns from "node:dns/promises";
 import { BlockList, isIP } from "node:net";
 
 const blocked = new BlockList();
+const demoPaths = new Set([
+  "/demo/broken.html",
+  "/demo/fixed.html",
+  "/demo/demo.css",
+  "/demo/scene.svg",
+]);
 
 for (const [address, prefix] of [
   ["0.0.0.0", 8],
@@ -55,7 +61,10 @@ export async function checkUrl(raw, { allowDemo = false } = {}) {
     allowDemo &&
     url.protocol === "http:" &&
     host === "localhost" &&
-    url.port === "5173"
+    url.port === "5173" &&
+    !url.username &&
+    !url.password &&
+    demoPaths.has(url.pathname)
   )
     return url.href;
   if (

@@ -33,9 +33,13 @@ test("rejeita URLs locais, protocolos e credenciais", async () => {
 });
 
 test("permite a página de demonstração apenas quando habilitada", async () => {
-  await assert.rejects(checkUrl("http://localhost:5173/"));
+  await assert.rejects(checkUrl("http://localhost:5173/demo/broken.html"));
   assert.equal(
-    await checkUrl("http://localhost:5173/", { allowDemo: true }),
-    "http://localhost:5173/",
+    await checkUrl("http://localhost:5173/demo/broken.html", { allowDemo: true }),
+    "http://localhost:5173/demo/broken.html",
   );
+  for (const path of ["/", "/api/analyses", "/src/App.tsx"]) {
+    await assert.rejects(checkUrl(`http://localhost:5173${path}`, { allowDemo: true }));
+  }
+  await assert.rejects(checkUrl("http://user:secret@localhost:5173/demo/broken.html", { allowDemo: true }));
 });
