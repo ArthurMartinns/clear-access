@@ -44,6 +44,18 @@ public class AnalysisRepository {
         return rows.stream().findFirst().map(this::parseResult);
     }
 
+    public Optional<JsonNode> findPrevious(UUID id) {
+        List<String> rows = jdbc.query("""
+                SELECT older.result_json FROM analyses older
+                JOIN analyses current_analysis ON current_analysis.id = ?
+                WHERE older.url = current_analysis.url
+                  AND (older.analyzed_at < current_analysis.analyzed_at
+                    OR (older.analyzed_at = current_analysis.analyzed_at AND older.id < current_analysis.id))
+                ORDER BY older.analyzed_at DESC, older.id DESC LIMIT 1
+                """, (rs, rowNum) -> rs.getString("result_json"), id);
+        return rows.stream().findFirst().map(this::parseResult);
+    }
+
     public List<AnalysisSummary> findRecent() {
         return jdbc.query("""
                 SELECT id, url, title, analyzed_at, issue_count, needs_manual_review, checked_rules
@@ -67,5 +79,6 @@ public class AnalysisRepository {
     }
 
     public record AnalysisSummary(UUID id, String url, String title, Instant analyzedAt,
-                                  int issueCount, int needsManualReview, int checkedRules) {}
+            int issueCount, int needsManualReview, int checkedRules) {
+    }
 }

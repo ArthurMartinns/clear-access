@@ -3,6 +3,7 @@ package com.clearaccess;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,11 @@ public class AnalysisService {
     public JsonNode findById(UUID id) {
         return repository.findById(id)
                 .orElseThrow(() -> new AnalysisException(HttpStatus.NOT_FOUND, "Análise não encontrada."));
+    }
+
+    public Optional<JsonNode> findPrevious(UUID id) {
+        findById(id);
+        return repository.findPrevious(id);
     }
 
     public List<AnalysisRepository.AnalysisSummary> findRecent() {

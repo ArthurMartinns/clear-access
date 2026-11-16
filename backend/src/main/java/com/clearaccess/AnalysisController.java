@@ -3,6 +3,7 @@ package com.clearaccess;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.net.URI;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -41,5 +42,12 @@ public class AnalysisController {
         return service.findById(id);
     }
 
-    public record AnalysisRequest(String url) {}
+    @GetMapping("/{id}/previous")
+    public ResponseEntity<JsonNode> previous(@PathVariable UUID id) {
+        Optional<JsonNode> previous = service.findPrevious(id);
+        return previous.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    public record AnalysisRequest(String url) {
+    }
 }
