@@ -15,11 +15,12 @@ test("separa ocorrências novas, resolvidas e persistentes", () => {
   assert.equal(result.unchanged, 1);
   assert.equal(result.resolved, 1);
   assert.deepEqual(result.added, [nextIssues[1]]);
+  assert.deepEqual(result.resolvedIssues, [oldIssues[1]]);
 });
 
 test("conta seletores repetidos sem confundir ocorrências", () => {
   const issue = { ruleId: "label", selector: "input" };
   assert.deepEqual(compareIssues([issue], [issue, issue]), {
-    added: [], resolved: 1, unchanged: 1,
+    added: [], resolved: 1, resolvedIssues: [issue], unchanged: 1,
   });
 });
