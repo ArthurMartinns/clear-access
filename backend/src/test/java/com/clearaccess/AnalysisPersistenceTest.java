@@ -28,6 +28,8 @@ class AnalysisPersistenceTest {
         private ObjectMapper mapper;
         @MockitoBean
         private AnalysisRunner runner;
+        @Autowired
+        private AnalysisRepository repository;
 
         @Test
         void savesAndRetrievesAnalysis() throws Exception {
@@ -81,5 +83,44 @@ class AnalysisPersistenceTest {
                                 .andExpect(status().isNoContent());
                 mockMvc.perform(get("/api/analyses/" + UUID.randomUUID() + "/previous"))
                                 .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void searchesSavedHistoryAndValidatesPage() throws Exception {
+                when(runner.analyze("https://example.com/"))
+                                .thenReturn(mapper.readTree("""
+                                                {"url":"https://example.com/","title":"Página Alfa","issues":[],
+                                                 "needsManualReview":0,"checkedRules":12,"analyzedAt":"2026-11-12T13:00:00Z"}
+                                                """));
+                mockMvc.perform(post("/api/analyses").contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"url\":\"https://example.com/\"}"))
+                                .andExpect(status().isCreated());
+
+                mockMvc.perform(get("/api/analyses/history").param("q", "ALFA"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.total").value(1))
+                                .andExpect(jsonPath("$.items[0].title").value("Página Alfa"));
+                mockMvc.perform(get("/api/analyses/history").param("q", "inexistente"))
+                                .andExpect(jsonPath("$.total").value(0));
+                mockMvc.perform(get("/api/analyses/history").param("page", "-1"))
+                                .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void paginatesHistoryAfterTwentyResults() throws Exception {
+                for (int index = 0; index < 21; index++) {
+                        var result = mapper.createObjectNode();
+                        result.put("url", "https://example.com/" + index);
+                        result.put("title", "Página " + index);
+                        result.put("analyzedAt", "2026-11-12T13:00:00Z");
+                        result.putArray("issues");
+                        result.put("needsManualReview", 0);
+                        result.put("checkedRules", 1);
+                        repository.save(UUID.randomUUID(), result);
+                }
+                mockMvc.perform(get("/api/analyses/history").param("page", "1"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.total").value(21))
+                                .andExpect(jsonPath("$.items.length()").value(1));
         }
 }

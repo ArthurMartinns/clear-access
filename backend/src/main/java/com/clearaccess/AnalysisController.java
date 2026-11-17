@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -35,6 +36,12 @@ public class AnalysisController {
     @GetMapping
     public List<AnalysisRepository.AnalysisSummary> recent() {
         return service.findRecent();
+    }
+
+    @GetMapping("/history")
+    public AnalysisRepository.AnalysisPage history(@RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "0") int page) {
+        return service.search(q, page);
     }
 
     @GetMapping("/{id}")

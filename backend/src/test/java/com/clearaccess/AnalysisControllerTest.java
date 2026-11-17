@@ -76,6 +76,16 @@ class AnalysisControllerTest {
         }
 
         @Test
+        void listsPagedHistory() throws Exception {
+                when(service.search("example", 2)).thenReturn(
+                                new AnalysisRepository.AnalysisPage(List.of(), 2, 20, 0));
+                mockMvc.perform(get("/api/analyses/history").param("q", "example").param("page", "2"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.page").value(2))
+                                .andExpect(jsonPath("$.items").isArray());
+        }
+
+        @Test
         void returnsNotFoundForUnknownId() throws Exception {
                 UUID id = UUID.randomUUID();
                 when(service.findById(id))

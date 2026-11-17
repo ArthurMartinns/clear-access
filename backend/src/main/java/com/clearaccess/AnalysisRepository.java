@@ -70,6 +70,24 @@ public class AnalysisRepository {
                 rs.getInt("checked_rules")));
     }
 
+    public AnalysisPage search(String query, int page) {
+        String term = "%" + query.toLowerCase(java.util.Locale.ROOT)
+                .replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+        String where = "WHERE LOWER(url) LIKE ? ESCAPE '\\' OR LOWER(title) LIKE ? ESCAPE '\\'";
+        int total = jdbc.queryForObject("SELECT COUNT(*) FROM analyses " + where,
+                Integer.class, term, term);
+        List<AnalysisSummary> items = jdbc.query("""
+                SELECT id, url, title, analyzed_at, issue_count, needs_manual_review, checked_rules
+                FROM analyses
+                """ + where + " ORDER BY analyzed_at DESC, id DESC LIMIT ? OFFSET ?",
+                (rs, rowNum) -> new AnalysisSummary(
+                        rs.getObject("id", UUID.class), rs.getString("url"), rs.getString("title"),
+                        rs.getTimestamp("analyzed_at").toInstant(), rs.getInt("issue_count"),
+                        rs.getInt("needs_manual_review"), rs.getInt("checked_rules")),
+                term, term, 20, page * 20);
+        return new AnalysisPage(items, page, 20, total);
+    }
+
     private JsonNode parseResult(String json) {
         try {
             return mapper.readTree(json);
@@ -80,5 +98,8 @@ public class AnalysisRepository {
 
     public record AnalysisSummary(UUID id, String url, String title, Instant analyzedAt,
             int issueCount, int needsManualReview, int checkedRules) {
+    }
+
+    public record AnalysisPage(List<AnalysisSummary> items, int page, int size, int total) {
     }
 }

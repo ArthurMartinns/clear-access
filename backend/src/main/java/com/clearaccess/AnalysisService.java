@@ -42,4 +42,12 @@ public class AnalysisService {
     public List<AnalysisRepository.AnalysisSummary> findRecent() {
         return repository.findRecent();
     }
+
+
+    public AnalysisRepository.AnalysisPage search(String query, int page) {
+        if (page < 0 || page > 10000 || query.length() > 200) {
+            throw new AnalysisException(HttpStatus.BAD_REQUEST, "Busca ou página inválida.");
+        }
+        return repository.search(query.trim(), page);
+    }
 }
