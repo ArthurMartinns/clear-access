@@ -30,9 +30,15 @@ test("abre histórico, compara relatórios e respeita navegação do navegador",
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await page.route("**/api/analyses**", async (route) => {
-    const path = new URL(route.request().url()).pathname;
+    const requestUrl = new URL(route.request().url());
+    const path = requestUrl.pathname;
     let body;
-    if (path === "/api/analyses") body = summaries;
+    if (path === "/api/analyses/history") {
+      const q = requestUrl.searchParams.get("q")?.toLowerCase() ?? "";
+      const items = summaries.filter((item) => `${item.title} ${item.url}`.toLowerCase().includes(q));
+      body = { items, page: Number(requestUrl.searchParams.get("page") ?? 0), size: 20, total: items.length };
+    }
+    else if (path === "/api/analyses") body = summaries;
     else if (path === `/api/analyses/${newId}/previous`) body = previous;
     else if (path === `/api/analyses/${oldId}/previous`) {
       await route.fulfill({ status: 204 });
@@ -44,13 +50,21 @@ test("abre histórico, compara relatórios e respeita navegação do navegador",
   });
 
   await page.goto(baseUrl);
+  await page.getByLabel("Buscar no histórico").fill("não existe");
+  await page.getByText("Nenhuma análise corresponde à busca.").waitFor();
+  await page.getByLabel("Buscar no histórico").fill("");
+  await page.locator(".history-item").first().waitFor();
   if (process.env.CLEARACCESS_VISUAL_OUTPUT) {
     await page.locator(".history-item").first().waitFor();
     await page.screenshot({ path: `${process.env.CLEARACCESS_VISUAL_OUTPUT}/first-run-desktop.png`, fullPage: true });
   }
   await page.locator(".history-item").first().click();
-  await page.getByText("novas ocorrências").waitFor();
+  await page.getByText("novas ocorrências", { exact: true }).waitFor();
   assert.equal(await page.locator(".comparison-values strong").allTextContents().then((values) => values.join(",")), "1,1,1");
+  assert.equal(await page.getByText("Ocorrências resolvidas").count(), 1);
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Baixar CSV" }).click();
+  assert.match((await downloadPromise).suggestedFilename(), /clearaccess-.*\.csv/);
   assert.equal(new URL(page.url()).searchParams.get("analysis"), newId);
   const audit = await new AxeBuilder({ page }).analyze();
   assert.deepEqual(audit.violations.map(({ id }) => id), []);
@@ -67,9 +81,9 @@ test("abre histórico, compara relatórios e respeita navegação do navegador",
   await page.getByText("Esta é a primeira análise salva deste endereço.").waitFor();
   assert.equal(new URL(page.url()).searchParams.get("analysis"), oldId);
   await page.goBack();
-  await page.getByText("novas ocorrências").waitFor();
+  await page.getByText("novas ocorrências", { exact: true }).waitFor();
   assert.equal(new URL(page.url()).searchParams.get("analysis"), newId);
   await page.reload();
-  await page.getByText("novas ocorrências").waitFor();
+  await page.getByText("novas ocorrências", { exact: true }).waitFor();
   assert.equal(await page.locator(".comparison-values strong").allTextContents().then((values) => values.join(",")), "1,1,1");
 });
