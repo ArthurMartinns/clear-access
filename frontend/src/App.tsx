@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { compareIssues } from "./compare";
+import { downloadReport, issuesCsv } from "./export";
 
 type Impact = "critical" | "serious" | "moderate" | "minor";
 
@@ -35,6 +36,8 @@ type AnalysisSummary = {
   needsManualReview: number;
   checkedRules: number;
 };
+
+type AnalysisPage = { items: AnalysisSummary[]; page: number; size: number; total: number };
 
 async function readResponse<T>(response: Response): Promise<T> {
   if (response.status === 204) return null as T;
@@ -108,6 +111,11 @@ export default function App() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(reportIdFromUrl);
   const [history, setHistory] = useState<AnalysisSummary[]>([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyPage, setHistoryPage] = useState(0);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [historySearch, setHistorySearch] = useState("");
+  const historySequence = useRef(0);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
@@ -120,21 +128,25 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function loadHistory() {
+  async function loadHistory(page = historyPage, search = historySearch) {
+    const sequence = ++historySequence.current;
     setHistoryLoading(true);
     setHistoryError("");
     try {
-      setHistory(
-        await readResponse<AnalysisSummary[]>(await fetch("/api/analyses")),
-      );
+      const params = new URLSearchParams({ page: String(page), q: search });
+      const result = await readResponse<AnalysisPage>(await fetch(`/api/analyses/history?${params}`));
+      if (sequence !== historySequence.current) return;
+      setHistory(result.items);
+      setHistoryTotal(result.total);
     } catch (cause) {
+      if (sequence !== historySequence.current) return;
       setHistoryError(
         cause instanceof Error
           ? cause.message
           : "Não foi possível carregar o histórico.",
       );
     } finally {
-      setHistoryLoading(false);
+      if (sequence === historySequence.current) setHistoryLoading(false);
     }
   }
 
@@ -193,7 +205,6 @@ export default function App() {
   }
 
   useEffect(() => {
-    void loadHistory();
     void loadReport(reportIdFromUrl());
     const onPopState = () => {
       void loadReport(reportIdFromUrl());
@@ -204,6 +215,18 @@ export default function App() {
       window.removeEventListener("popstate", onPopState);
     };
   }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setHistorySearch(historyQuery.trim());
+      setHistoryPage(0);
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [historyQuery]);
+
+  useEffect(() => {
+    void loadHistory(historyPage, historySearch);
+  }, [historyPage, historySearch]);
 
   function openReport(id: string | null) {
     setReportUrl(id);
@@ -250,7 +273,8 @@ export default function App() {
       const body = await readResponse<Analysis>(response);
       setReportUrl(body.id);
       void loadReport(body.id, body);
-      void loadHistory();
+      setHistoryPage(0);
+      void loadHistory(0, historySearch);
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -381,6 +405,15 @@ export default function App() {
                 </button>
               </div>
 
+              <div className="report-actions" aria-label="Exportar relatório">
+                <button type="button" className="text-action" onClick={() =>
+                  downloadReport(JSON.stringify(analysis, null, 2), `clearaccess-${analysis.id}.json`, "application/json")
+                }>Baixar JSON</button>
+                <button type="button" className="text-action" onClick={() =>
+                  downloadReport(issuesCsv(analysis.issues), `clearaccess-${analysis.id}.csv`, "text/csv;charset=utf-8")
+                }>Baixar CSV</button>
+              </div>
+
               <div className="summary" aria-label="Resumo da análise">
                 <div>
                   <span>Ocorrências</span>
@@ -435,7 +468,7 @@ export default function App() {
                     </button>
                   </p>
                 ) : comparison ? (
-                  <div className="comparison-values">
+                  <><div className="comparison-values">
                     <div>
                       <strong>{comparison.added.length}</strong>
                       <span>novas ocorrências</span>
@@ -449,6 +482,21 @@ export default function App() {
                       <span>persistentes</span>
                     </div>
                   </div>
+                  {(comparison.added.length > 0 || comparison.resolvedIssues.length > 0) && (
+                    <div className="comparison-details">
+                      {([
+                        ["Novas ocorrências", comparison.added],
+                        ["Ocorrências resolvidas", comparison.resolvedIssues],
+                      ] as const).map(([label, issues]) => issues.length > 0 && (
+                        <div key={label}>
+                          <h4>{label}</h4>
+                          <ul>{issues.map((issue, index) => <li key={`${issue.ruleId}-${issue.selector}-${index}`}>
+                            <strong>{issue.title}</strong> <span>{issue.selector || issue.ruleId}</span>
+                          </li>)}</ul>
+                        </div>
+                      ))}
+                    </div>
+                  )}</>
                 ) : (
                   <p>Esta é a primeira análise salva deste endereço.</p>
                 )}
@@ -594,8 +642,8 @@ export default function App() {
           <section className="history" aria-labelledby="history-title">
             <div className="history-heading">
               <div>
-                <h2 id="history-title">Histórico recente</h2>
-                <p>Até 20 análises salvas, da mais recente à mais antiga.</p>
+                <h2 id="history-title">Histórico de análises</h2>
+                <p>Busque análises salvas pelo título ou endereço.</p>
               </div>
               <button
                 type="button"
@@ -606,6 +654,11 @@ export default function App() {
                 Atualizar
               </button>
             </div>
+            <label className="history-search">
+              <span>Buscar no histórico</span>
+              <input type="search" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)}
+                placeholder="Título ou URL" maxLength={200} />
+            </label>
             {historyLoading && history.length === 0 ? (
               <p role="status">Carregando histórico…</p>
             ) : historyError ? (
@@ -621,7 +674,9 @@ export default function App() {
               </p>
             ) : history.length === 0 ? (
               <p className="history-empty">
-                As análises concluídas aparecerão aqui.
+                {historySearch
+                  ? "Nenhuma análise corresponde à busca."
+                  : "As análises concluídas aparecerão aqui."}
               </p>
             ) : (
               <ul className="history-list">
@@ -654,6 +709,15 @@ export default function App() {
                   </li>
                 ))}
               </ul>
+            )}
+            {!historyError && historyTotal > 0 && (
+              <nav className="history-pagination" aria-label="Páginas do histórico">
+                <button type="button" disabled={historyLoading || historyPage === 0}
+                  onClick={() => setHistoryPage(historyPage - 1)}>Anterior</button>
+                <span>Página {historyPage + 1} de {Math.ceil(historyTotal / 20)} · {historyTotal} análises</span>
+                <button type="button" disabled={historyLoading || (historyPage + 1) * 20 >= historyTotal}
+                  onClick={() => setHistoryPage(historyPage + 1)}>Próxima</button>
+              </nav>
             )}
           </section>
         </div>
