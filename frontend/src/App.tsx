@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { compareIssues } from "./compare";
-import { downloadReport, issuesCsv } from "./export";
+import { comparisonCsv, downloadReport, issuesCsv } from "./export";
 
 type Impact = "critical" | "serious" | "moderate" | "minor";
 
@@ -122,6 +122,9 @@ export default function App() {
   const [previous, setPrevious] = useState<Analysis | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonError, setComparisonError] = useState("");
+  const [timeline, setTimeline] = useState<AnalysisSummary[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState("");
   const requestSequence = useRef(0);
   const [filter, setFilter] = useState<Impact | "all">("all");
   const [query, setQuery] = useState("");
@@ -155,6 +158,9 @@ export default function App() {
     setSelectedId(id);
     setPrevious(null);
     setComparisonError("");
+    setTimeline([]);
+    setTimelineError("");
+    setTimelineLoading(false);
     setError("");
     setFilter("all");
     setQuery("");
@@ -175,6 +181,17 @@ export default function App() {
       if (sequence !== requestSequence.current) return;
       setAnalysis(result);
       setReportLoading(false);
+      setTimelineLoading(true);
+      void fetch(`/api/analyses/${encodeURIComponent(id)}/timeline`)
+      .then(readResponse<AnalysisSummary[]>).then((items) => {
+        if (sequence === requestSequence.current) setTimeline(items);
+      }).catch((cause) => {
+        if (sequence === requestSequence.current) setTimelineError(
+          cause instanceof Error ? cause.message : "Não foi possível carregar a evolução.",
+        );
+      }).finally(() => {
+        if (sequence === requestSequence.current) setTimelineLoading(false);
+      });
       setComparisonLoading(true);
       try {
         const prior = await readResponse<Analysis | null>(
@@ -293,6 +310,7 @@ export default function App() {
     analysis && previous
       ? compareIssues(analysis.issues, previous.issues)
       : null;
+  const timelineMax = Math.max(1, ...timeline.map((item) => item.issueCount));
 
   return (
     <div className="app-frame">
@@ -433,6 +451,31 @@ export default function App() {
                 </div>
               </div>
 
+              <section className="timeline" aria-labelledby="timeline-title">
+                <div className="timeline-heading">
+                  <h3 id="timeline-title">Evolução das ocorrências</h3>
+                  <p>Até dez análises deste endereço, incluindo a atual.</p>
+                </div>
+                {timelineLoading ? <p role="status">Carregando evolução…</p>
+                  : timelineError ? <p role="alert">{timelineError}</p>
+                  : timeline.length > 0 ? (
+                    <ol className="timeline-list">
+                      {timeline.map((item) => (
+                        <li key={item.id}>
+                          <button type="button" onClick={() => openReport(item.id)}
+                            aria-current={item.id === analysis.id ? "page" : undefined}>
+                            <time dateTime={item.analyzedAt}>{formatDate(item.analyzedAt)}</time>
+                            <span className="timeline-track" aria-hidden="true"><span style={{
+                              width: `${item.issueCount / timelineMax * 100}%`,
+                            }} /></span>
+                            <strong>{item.issueCount}</strong>
+                          </button>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : <p>Nenhuma evolução disponível.</p>}
+              </section>
+
               <section
                 className="comparison"
                 aria-labelledby="comparison-title"
@@ -445,6 +488,12 @@ export default function App() {
                     )}
                   </div>
                   {previous && (
+                    <div className="comparison-actions">
+                    {comparison && <button type="button" className="text-action"
+                      onClick={() => downloadReport(
+                        comparisonCsv(comparison.added, comparison.resolvedIssues),
+                        `clearaccess-comparacao-${analysis.id}.csv`, "text/csv;charset=utf-8",
+                      )}>Baixar comparação</button>}
                     <button
                       type="button"
                       className="text-action"
@@ -452,6 +501,7 @@ export default function App() {
                     >
                       Abrir anterior
                     </button>
+                    </div>
                   )}
                 </div>
                 {comparisonLoading ? (

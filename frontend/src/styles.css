@@ -311,12 +311,80 @@ a {
   margin: -17px 0 36px;
 }
 
+.timeline {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: -17px 0 36px;
+}
+
+.timeline-heading h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.timeline-heading p,
+.timeline > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.timeline-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+
+.timeline-list button {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr) 34px;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 3px 4px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+}
+
+.timeline-list button:hover,
+.timeline-list button[aria-current="page"] {
+  background: var(--raised);
+}
+
+.timeline-track {
+  height: 8px;
+  background: var(--raised);
+  border-radius: 4px;
+}
+
+.timeline-track span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+}
+
+.timeline-list strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .comparison-heading,
 .history-heading {
   display: flex;
   justify-content: space-between;
   align-items: start;
   gap: 16px;
+}
+
+.comparison-actions {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
 }
 
 .comparison h3,
@@ -801,6 +869,20 @@ a {
 }
 
 @media (max-width: 760px) {
+  .timeline {
+    padding: 16px;
+    margin-top: -12px;
+  }
+
+  .timeline-list button {
+    grid-template-columns: 94px minmax(0, 1fr) 24px;
+    gap: 8px;
+    min-height: 44px;
+  }
+
+  .timeline-list time {
+    font-size: 11px;
+  }
   .history-search input,
   .history-pagination button {
     min-height: 44px;
