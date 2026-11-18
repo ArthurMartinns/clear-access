@@ -73,9 +73,12 @@ curl http://localhost:8080/api/analyses
 curl 'http://localhost:8080/api/analyses/history?q=exemplo&page=0'
 curl http://localhost:8080/api/analyses/SEU-ID-AQUI
 curl http://localhost:8080/api/analyses/SEU-ID-AQUI/previous
+curl http://localhost:8080/api/analyses/SEU-ID-AQUI/timeline
 ```
 
 A lista simples retorna até 20 resumos, do mais recente ao mais antigo. `/history` retorna páginas de 20 resumos em `items`, com `page`, `size` e `total`. O parâmetro `q` busca sem diferenciar maiúsculas e minúsculas no título e na URL; `page` começa em zero. A consulta por ID devolve o relatório completo ou HTTP 404. O endpoint `/previous` devolve o relatório anterior da mesma URL final, HTTP 204 quando não existe anterior e HTTP 404 para um ID inexistente. Na interface, `?analysis=SEU-ID-AQUI` abre um relatório salvo diretamente. A comparação considera a combinação de regra e seletor de cada ocorrência; mudanças nessa combinação aparecem como ocorrência resolvida e nova.
+
+`/timeline` retorna até dez resumos da mesma URL, da análise selecionada para trás, ou HTTP 404 se o ID não existir. A interface mostra a evolução da contagem de ocorrências e permite abrir cada execução. Também é possível baixar a comparação de ocorrências novas e resolvidas em CSV. O worker interrompe análises que ultrapassem 500 requisições de rede.
 
 ## Testes
 
@@ -93,6 +96,6 @@ O worker bloqueia destinos locais e endereços reservados, inclusive em redireci
 
 1. Preparação de uma implantação com isolamento de rede para o navegador.
 2. Filtros adicionais e ordenação no histórico.
-3. Exportação de comparações e acompanhamento de tendências entre várias análises.
+3. Filtros por período e impacto para acompanhar tendências entre várias análises.
 
 A primeira versão não depende de IA ou de ferramentas pagas.

@@ -40,6 +40,8 @@ test("abre histórico, compara relatórios e respeita navegação do navegador",
     }
     else if (path === "/api/analyses") body = summaries;
     else if (path === `/api/analyses/${newId}/previous`) body = previous;
+    else if (path === `/api/analyses/${newId}/timeline`) body = summaries;
+    else if (path === `/api/analyses/${oldId}/timeline`) body = [summaries[1]];
     else if (path === `/api/analyses/${oldId}/previous`) {
       await route.fulfill({ status: 204 });
       return;
@@ -62,6 +64,10 @@ test("abre histórico, compara relatórios e respeita navegação do navegador",
   await page.getByText("novas ocorrências", { exact: true }).waitFor();
   assert.equal(await page.locator(".comparison-values strong").allTextContents().then((values) => values.join(",")), "1,1,1");
   assert.equal(await page.getByText("Ocorrências resolvidas").count(), 1);
+  assert.equal(await page.locator(".timeline-list li").count(), 2);
+  const comparisonDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Baixar comparação" }).click();
+  assert.match((await comparisonDownload).suggestedFilename(), /clearaccess-comparacao-.*\.csv/);
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Baixar CSV" }).click();
   assert.match((await downloadPromise).suggestedFilename(), /clearaccess-.*\.csv/);
