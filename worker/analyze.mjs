@@ -1,6 +1,7 @@
 import { checkUrl, InvalidTargetError } from "./network.mjs";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { RequestBudget } from "./request-budget.mjs";
 
 let browser;
 
@@ -27,8 +28,14 @@ try {
     acceptDownloads: false,
   });
 
+  const requestBudget = new RequestBudget();
+
   await context.route("**/*", async (route) => {
     try {
+      if (!requestBudget.consume()) {
+        await route.abort();
+        return;
+      }
       await checkUrl(route.request().url(), {
         allowDemo: process.env.CLEARACCESS_DEMO === "1",
       });
@@ -40,6 +47,7 @@ try {
   });
 
   const page = await context.newPage();
+  page.on("dialog", (dialog) => void dialog.dismiss());
 
   page.setDefaultTimeout(15000);
 
@@ -62,6 +70,10 @@ try {
     page,
     axeSource: `${axe.source}\naxe.configure({ locale: ${JSON.stringify(locale)} });`,
   }).analyze();
+
+  if (requestBudget.exceeded) {
+    throw new Error("A página excedeu o limite de 500 requisições.");
+  }
 
   const issues = results.violations.flatMap((violation) =>
     violation.nodes.map((node) => ({
