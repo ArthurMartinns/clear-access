@@ -79,9 +79,16 @@ class AnalysisPersistenceTest {
                 mockMvc.perform(get("/api/analyses/" + ids[2] + "/previous"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.id").value(ids[0].toString()));
+                mockMvc.perform(get("/api/analyses/" + ids[2] + "/timeline"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.length()").value(2))
+                                .andExpect(jsonPath("$[0].id").value(ids[2].toString()))
+                                .andExpect(jsonPath("$[1].id").value(ids[0].toString()));
                 mockMvc.perform(get("/api/analyses/" + ids[0] + "/previous"))
                                 .andExpect(status().isNoContent());
                 mockMvc.perform(get("/api/analyses/" + UUID.randomUUID() + "/previous"))
+                                .andExpect(status().isNotFound());
+                mockMvc.perform(get("/api/analyses/" + UUID.randomUUID() + "/timeline"))
                                 .andExpect(status().isNotFound());
         }
 

@@ -56,6 +56,22 @@ public class AnalysisRepository {
         return rows.stream().findFirst().map(this::parseResult);
     }
 
+    public List<AnalysisSummary> findTimeline(UUID id) {
+        return jdbc.query("""
+                SELECT older.id, older.url, older.title, older.analyzed_at, older.issue_count,
+                       older.needs_manual_review, older.checked_rules
+                FROM analyses older
+                JOIN analyses selected ON selected.id = ?
+                WHERE older.url = selected.url
+                  AND (older.analyzed_at < selected.analyzed_at
+                    OR (older.analyzed_at = selected.analyzed_at AND older.id <= selected.id))
+                ORDER BY older.analyzed_at DESC, older.id DESC LIMIT 10
+                """, (rs, rowNum) -> new AnalysisSummary(
+                rs.getObject("id", UUID.class), rs.getString("url"), rs.getString("title"),
+                rs.getTimestamp("analyzed_at").toInstant(), rs.getInt("issue_count"),
+                rs.getInt("needs_manual_review"), rs.getInt("checked_rules")), id);
+    }
+
     public List<AnalysisSummary> findRecent() {
         return jdbc.query("""
                 SELECT id, url, title, analyzed_at, issue_count, needs_manual_review, checked_rules

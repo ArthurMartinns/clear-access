@@ -55,6 +55,11 @@ public class AnalysisController {
         return previous.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.noContent().build());
     }
 
+    @GetMapping("/{id}/timeline")
+    public List<AnalysisRepository.AnalysisSummary> timeline(@PathVariable UUID id) {
+        return service.findTimeline(id);
+    }
+
     public record AnalysisRequest(String url) {
     }
 }
