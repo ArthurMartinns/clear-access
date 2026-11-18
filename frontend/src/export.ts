@@ -9,6 +9,11 @@ export type ExportIssue = {
   helpUrl: string;
 };
 
+function escapeCsv(value: string): string {
+  const safe = /^[\s]*[=+\-@]/.test(value) ? `'${value}` : value;
+  return `"${safe.replaceAll('"', '""')}"`;
+}
+
 export function issuesCsv(issues: ExportIssue[]): string {
   const columns: (keyof ExportIssue)[] = [
     "impact",
@@ -20,20 +25,27 @@ export function issuesCsv(issues: ExportIssue[]): string {
     "howToFix",
     "helpUrl",
   ];
-  const escape = (value: string) => {
-    const safe = /^[\s]*[=+\-@]/.test(value) ? `'${value}` : value;
-    return `"${safe.replaceAll('"', '""')}"`;
-  };
   return (
     "\uFEFF" +
     [
       columns.join(","),
       ...issues.map((issue) =>
-        columns.map((column) => escape(issue[column] ?? "")).join(","),
+        columns.map((column) => escapeCsv(issue[column] ?? "")).join(","),
       ),
     ].join("\r\n") +
     "\r\n"
   );
+}
+
+export function comparisonCsv(added: ExportIssue[], resolved: ExportIssue[]): string {
+  const rows: Array<[string, ExportIssue]> = [
+    ...added.map((issue): [string, ExportIssue] => ["nova", issue]),
+    ...resolved.map((issue): [string, ExportIssue] => ["resolvida", issue]),
+  ];
+  return "\uFEFFestado,impacto,regra,título,seletor\r\n" + rows.map(([status, issue]) =>
+    [status, issue.impact, issue.ruleId, issue.title, issue.selector]
+      .map(escapeCsv).join(","),
+  ).join("\r\n") + (rows.length ? "\r\n" : "");
 }
 
 export function downloadReport(

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { issuesCsv } from "./export.ts";
+import { comparisonCsv, issuesCsv } from "./export.ts";
 
 test("exporta CSV com BOM, aspas e quebras de linha", () => {
   const csv = issuesCsv([
@@ -18,6 +18,14 @@ test("exporta CSV com BOM, aspas e quebras de linha", () => {
   assert.ok(csv.startsWith("\uFEFFimpact,ruleId"));
   assert.ok(csv.includes('"Campo ""nome"""'));
   assert.ok(csv.includes('"linha 1\nlinha 2"'));
+});
+
+test("exporta ocorrências novas e resolvidas com estado explícito", () => {
+  const issue = { impact: "serious", ruleId: "label", title: "Campo",
+    category: "forms", selector: "input", why: "", howToFix: "", helpUrl: "" };
+  const csv = comparisonCsv([issue], [issue]);
+  assert.ok(csv.includes('"nova","serious","label"'));
+  assert.ok(csv.includes('"resolvida","serious","label"'));
 });
 
 test("neutraliza fórmulas em valores vindos da página analisada", () => {
