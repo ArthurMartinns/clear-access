@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Semaphore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -16,14 +17,21 @@ public class AnalysisRunner {
     private static final Duration TIMEOUT = Duration.ofSeconds(60);
     private final ObjectMapper mapper;
     private final Path script;
+    private final Semaphore slots;
 
     public AnalysisRunner(ObjectMapper mapper,
-            @Value("${clearaccess.worker.script:../worker/analyze.mjs}") String script) {
+            @Value("${clearaccess.worker.script:../worker/analyze.mjs}") String script,
+            @Value("${clearaccess.worker.max-concurrent:2}") int maxConcurrent) {
         this.mapper = mapper;
         this.script = Path.of(script).toAbsolutePath().normalize();
+        this.slots = new Semaphore(Math.max(1, maxConcurrent));
     }
 
     public JsonNode analyze(String url) {
+        if (!slots.tryAcquire()) {
+            throw new AnalysisException(HttpStatus.TOO_MANY_REQUESTS,
+                    "O analisador está ocupado. Tente novamente em instantes.");
+        }
         Path output = null;
         Path errors = null;
         Process process = null;
@@ -56,6 +64,7 @@ public class AnalysisRunner {
                 stopProcess(process);
             deleteQuietly(output);
             deleteQuietly(errors);
+            slots.release();
         }
     }
 
