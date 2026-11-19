@@ -56,6 +56,30 @@ class AnalysisControllerTest {
         }
 
         @Test
+        void rejectsOversizedUrlBeforeStartingWorker() throws Exception {
+                String url = "https://example.com/" + "a".repeat(2048);
+                mockMvc.perform(post("/api/analyses")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(mapper.writeValueAsString(new AnalysisController.AnalysisRequest(url))))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.error").value("A URL deve ter até 2048 caracteres."));
+                org.mockito.Mockito.verifyNoInteractions(service);
+        }
+
+        @Test
+        void asksClientToRetryWhenWorkerIsBusy() throws Exception {
+                when(service.analyze("https://example.com/"))
+                                .thenThrow(new AnalysisException(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,
+                                                "O analisador está ocupado. Tente novamente em instantes."));
+                mockMvc.perform(post("/api/analyses")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"url\":\"https://example.com/\"}"))
+                                .andExpect(status().isTooManyRequests())
+                                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                                                .string("Retry-After", "10"));
+        }
+
+        @Test
         void returnsTargetValidationError() throws Exception {
                 when(service.analyze(anyString()))
                                 .thenThrow(new AnalysisException(org.springframework.http.HttpStatus.BAD_REQUEST,

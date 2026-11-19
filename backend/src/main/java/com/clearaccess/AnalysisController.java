@@ -29,7 +29,11 @@ public class AnalysisController {
         if (request == null || request.url() == null || request.url().isBlank()) {
             throw new AnalysisException(HttpStatus.BAD_REQUEST, "Informe uma URL.");
         }
-        JsonNode result = service.analyze(request.url());
+        String url = request.url().trim();
+        if (url.length() > 2048) {
+            throw new AnalysisException(HttpStatus.BAD_REQUEST, "A URL deve ter até 2048 caracteres.");
+        }
+        JsonNode result = service.analyze(url);
         return ResponseEntity.created(URI.create("/api/analyses/" + result.path("id").asText())).body(result);
     }
 
