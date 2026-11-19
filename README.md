@@ -4,7 +4,7 @@ O ClearAccess analisa a acessibilidade de páginas públicas e apresenta os prob
 
 ## Estado atual
 
-A interface React recebe a URL, mostra o andamento e apresenta o relatório com contagens, filtros por impacto, busca e detalhes de cada problema. Ela busca e pagina o histórico, abre relatórios salvos por link, mostra as ocorrências novas e resolvidas em relação à execução anterior do mesmo endereço e exporta relatórios em JSON ou CSV. A API Spring Boot recebe a URL em `POST /api/analyses`. Um worker Node abre a página com Chromium, executa o axe-core e devolve os problemas encontrados. Cada análise bem-sucedida é salva no PostgreSQL. A análise é síncrona e tem limite de 60 segundos. O endpoint `GET /api/health` verifica se a API está ativa.
+A interface React recebe a URL, mostra o andamento e apresenta o relatório com contagens, filtros por impacto, busca e detalhes de cada problema. Ela busca e pagina o histórico, abre relatórios salvos por link, mostra as ocorrências novas e resolvidas em relação à execução anterior do mesmo endereço e exporta relatórios em JSON ou CSV. A API Spring Boot recebe a URL em `POST /api/analyses`. Um worker Node abre a página com Chromium, executa o axe-core e devolve os problemas encontrados. Cada análise bem-sucedida é salva no PostgreSQL. A análise é síncrona e tem limite de 60 segundos. O endpoint `GET /api/health` verifica a conexão com o banco e retorna HTTP 503 quando ela falha.
 
 As regras do axe-core são apresentadas em português. A análise automatizada não substitui uma revisão manual de acessibilidade.
 
@@ -66,7 +66,7 @@ O caminho do worker é relativo ao diretório de execução da API. Caso inicie 
 curl -X POST http://localhost:8080/api/analyses -H "Content-Type: application/json" -d '{"url":"https://example.com/"}'
 ```
 
-Uma análise bem-sucedida recebe HTTP 201, cabeçalho `Location` e corpo com `id`, `url`, `title`, `issues`, `needsManualReview`, `checkedRules` e `analyzedAt`. Cada item em `issues` inclui regra, impacto, categoria, seletor, elemento, motivo e orientação de correção. Uma URL inválida ou interna recebe HTTP 400; falhas na página ou no navegador recebem HTTP 502; tempo esgotado recebe HTTP 504.
+Uma análise bem-sucedida recebe HTTP 201, cabeçalho `Location` e corpo com `id`, `url`, `title`, `issues`, `needsManualReview`, `checkedRules` e `analyzedAt`. Cada item em `issues` inclui regra, impacto, categoria, seletor, elemento, motivo e orientação de correção. Uma URL inválida, interna ou com mais de 2048 caracteres recebe HTTP 400; falhas na página ou no navegador recebem HTTP 502; analisador ocupado recebe HTTP 429 com `Retry-After: 10`; tempo esgotado recebe HTTP 504. Por padrão, a API aceita até duas análises simultâneas; configure `clearaccess.worker.max-concurrent` para ajustar o limite.
 
 ```bash
 curl http://localhost:8080/api/analyses
@@ -89,6 +89,8 @@ cd ../frontend && npm test && npm run build
 ```
 
 Para os testes de ponta a ponta, mantenha `npm run dev` ativo em `frontend/` e execute `npm run test:e2e` em `worker/`. Esses testes usam Chromium: verificam as duas páginas de demonstração com o worker real e testam histórico, comparação, navegação e acessibilidade da interface com respostas de API simuladas.
+
+Para validar a integração completa, inicie PostgreSQL, API com `CLEARACCESS_DEMO=1` e interface; depois execute `npm run test:live` em `worker/`. O teste cria três análises reais e verifica a API, a persistência, o histórico e a evolução. Ele deixa esses relatórios salvos no banco local.
 
 O worker bloqueia destinos locais e endereços reservados, inclusive em redirecionamentos e recursos da página. Para expor esta API publicamente, o navegador também deve ser isolado em uma rede sem acesso a serviços internos; a verificação de DNS da aplicação, por si só, não protege contra mudanças de DNS entre a validação e a conexão.
 
