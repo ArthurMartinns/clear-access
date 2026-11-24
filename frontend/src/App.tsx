@@ -115,6 +115,10 @@ export default function App() {
   const [historyPage, setHistoryPage] = useState(0);
   const [historyQuery, setHistoryQuery] = useState("");
   const [historySearch, setHistorySearch] = useState("");
+  const [historyIssues, setHistoryIssues] = useState("all");
+  const [historySort, setHistorySort] = useState("recent");
+  const [historyFrom, setHistoryFrom] = useState("");
+  const [historyTo, setHistoryTo] = useState("");
   const historySequence = useRef(0);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
@@ -136,7 +140,10 @@ export default function App() {
     setHistoryLoading(true);
     setHistoryError("");
     try {
-      const params = new URLSearchParams({ page: String(page), q: search });
+      const params = new URLSearchParams({
+        page: String(page), q: search, issues: historyIssues, sort: historySort,
+        from: historyFrom, to: historyTo,
+      });
       const result = await readResponse<AnalysisPage>(await fetch(`/api/analyses/history?${params}`));
       if (sequence !== historySequence.current) return;
       setHistory(result.items);
@@ -242,8 +249,12 @@ export default function App() {
   }, [historyQuery]);
 
   useEffect(() => {
+    setHistoryPage(0);
+  }, [historyIssues, historySort, historyFrom, historyTo]);
+
+  useEffect(() => {
     void loadHistory(historyPage, historySearch);
-  }, [historyPage, historySearch]);
+  }, [historyPage, historySearch, historyIssues, historySort, historyFrom, historyTo]);
 
   function openReport(id: string | null) {
     setReportUrl(id);
@@ -709,7 +720,38 @@ export default function App() {
               <input type="search" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)}
                 placeholder="Título ou URL" maxLength={200} />
             </label>
-            {historyLoading && history.length === 0 ? (
+            <div className="history-controls">
+              <label>Ocorrências
+                <select value={historyIssues} onChange={(event) => setHistoryIssues(event.target.value)}>
+                  <option value="all">Todas as análises</option>
+                  <option value="with">Com ocorrências</option>
+                  <option value="without">Sem ocorrências</option>
+                </select>
+              </label>
+              <label>Ordenar por
+                <select value={historySort} onChange={(event) => setHistorySort(event.target.value)}>
+                  <option value="recent">Mais recentes</option>
+                  <option value="oldest">Mais antigas</option>
+                  <option value="most">Mais ocorrências</option>
+                  <option value="fewest">Menos ocorrências</option>
+                </select>
+              </label>
+              <label>De (UTC)
+                <input type="date" value={historyFrom} max={historyTo || undefined}
+                  onChange={(event) => setHistoryFrom(event.target.value)} />
+              </label>
+              <label>Até (UTC)
+                <input type="date" value={historyTo} min={historyFrom || undefined}
+                  onChange={(event) => setHistoryTo(event.target.value)} />
+              </label>
+              {(historyQuery || historyIssues !== "all" || historySort !== "recent" || historyFrom || historyTo) && (
+                <button type="button" className="text-action history-clear" onClick={() => {
+                  setHistoryQuery(""); setHistoryIssues("all"); setHistorySort("recent");
+                  setHistoryFrom(""); setHistoryTo(""); setHistoryPage(0);
+                }}>Limpar filtros</button>
+              )}
+            </div>
+            {historyLoading ? (
               <p role="status">Carregando histórico…</p>
             ) : historyError ? (
               <p role="alert">
@@ -724,8 +766,8 @@ export default function App() {
               </p>
             ) : history.length === 0 ? (
               <p className="history-empty">
-                {historySearch
-                  ? "Nenhuma análise corresponde à busca."
+                {historySearch || historyIssues !== "all" || historyFrom || historyTo
+                  ? "Nenhuma análise corresponde aos filtros."
                   : "As análises concluídas aparecerão aqui."}
               </p>
             ) : (
