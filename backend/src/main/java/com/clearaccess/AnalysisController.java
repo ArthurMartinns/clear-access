@@ -44,8 +44,12 @@ public class AnalysisController {
 
     @GetMapping("/history")
     public AnalysisRepository.AnalysisPage history(@RequestParam(defaultValue = "") String q,
-            @RequestParam(defaultValue = "0") int page) {
-        return service.search(q, page);
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "all") String issues,
+            @RequestParam(defaultValue = "recent") String sort,
+            @RequestParam(defaultValue = "") String from,
+            @RequestParam(defaultValue = "") String to) {
+        return service.search(q, page, issues, sort, from, to);
     }
 
     @GetMapping("/{id}")

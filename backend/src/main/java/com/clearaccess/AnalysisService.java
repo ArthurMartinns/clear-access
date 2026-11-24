@@ -3,6 +3,9 @@ package com.clearaccess;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Instant;
+import java.time.DateTimeException;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
@@ -72,10 +75,28 @@ public class AnalysisService {
     }
 
 
-    public AnalysisRepository.AnalysisPage search(String query, int page) {
-        if (page < 0 || page > 10000 || query.length() > 200) {
+    public AnalysisRepository.AnalysisPage search(String query, int page, String issues, String sort,
+            String from, String to) {
+        if (page < 0 || page > 10000 || query.length() > 200
+                || !List.of("all", "with", "without").contains(issues)
+                || !List.of("recent", "oldest", "most", "fewest").contains(sort)) {
             throw new AnalysisException(HttpStatus.BAD_REQUEST, "Busca ou página inválida.");
         }
-        return repository.search(query.trim(), page);
+        Instant start = parseDate(from, false);
+        Instant end = parseDate(to, true);
+        if (start != null && end != null && !start.isBefore(end)) {
+            throw new AnalysisException(HttpStatus.BAD_REQUEST, "O período informado é inválido.");
+        }
+        return repository.search(query.trim(), page, issues, sort, start, end);
+    }
+
+    private Instant parseDate(String value, boolean exclusiveEnd) {
+        if (value.isBlank()) return null;
+        try {
+            LocalDate date = LocalDate.parse(value);
+            return (exclusiveEnd ? date.plusDays(1) : date).atStartOfDay().toInstant(ZoneOffset.UTC);
+        } catch (DateTimeException | ArithmeticException exception) {
+            throw new AnalysisException(HttpStatus.BAD_REQUEST, "O período informado é inválido.");
+        }
     }
 }

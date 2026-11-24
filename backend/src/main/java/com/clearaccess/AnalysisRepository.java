@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -86,21 +87,41 @@ public class AnalysisRepository {
                 rs.getInt("checked_rules")));
     }
 
-    public AnalysisPage search(String query, int page) {
+    public AnalysisPage search(String query, int page, String issues, String sort, Instant from, Instant to) {
         String term = "%" + query.toLowerCase(java.util.Locale.ROOT)
                 .replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
-        String where = "WHERE LOWER(url) LIKE ? ESCAPE '\\' OR LOWER(title) LIKE ? ESCAPE '\\'";
+        StringBuilder where = new StringBuilder("WHERE (LOWER(url) LIKE ? ESCAPE '\\' OR LOWER(title) LIKE ? ESCAPE '\\')");
+        List<Object> parameters = new ArrayList<>(List.of(term, term));
+        if (issues.equals("with")) where.append(" AND issue_count > 0");
+        if (issues.equals("without")) where.append(" AND issue_count = 0");
+        if (from != null) {
+            where.append(" AND analyzed_at >= ?");
+            parameters.add(Timestamp.from(from));
+        }
+        if (to != null) {
+            where.append(" AND analyzed_at < ?");
+            parameters.add(Timestamp.from(to));
+        }
+        String order = switch (sort) {
+            case "oldest" -> "analyzed_at ASC, id ASC";
+            case "most" -> "issue_count DESC, analyzed_at DESC, id DESC";
+            case "fewest" -> "issue_count ASC, analyzed_at DESC, id DESC";
+            default -> "analyzed_at DESC, id DESC";
+        };
         int total = jdbc.queryForObject("SELECT COUNT(*) FROM analyses " + where,
-                Integer.class, term, term);
+                Integer.class, parameters.toArray());
+        List<Object> pageParameters = new ArrayList<>(parameters);
+        pageParameters.add(20);
+        pageParameters.add(page * 20);
         List<AnalysisSummary> items = jdbc.query("""
                 SELECT id, url, title, analyzed_at, issue_count, needs_manual_review, checked_rules
                 FROM analyses
-                """ + where + " ORDER BY analyzed_at DESC, id DESC LIMIT ? OFFSET ?",
+                """ + where + " ORDER BY " + order + " LIMIT ? OFFSET ?",
                 (rs, rowNum) -> new AnalysisSummary(
                         rs.getObject("id", UUID.class), rs.getString("url"), rs.getString("title"),
                         rs.getTimestamp("analyzed_at").toInstant(), rs.getInt("issue_count"),
                         rs.getInt("needs_manual_review"), rs.getInt("checked_rules")),
-                term, term, 20, page * 20);
+                pageParameters.toArray());
         return new AnalysisPage(items, page, 20, total);
     }
 
