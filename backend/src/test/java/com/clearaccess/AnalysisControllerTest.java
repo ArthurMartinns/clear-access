@@ -101,7 +101,7 @@ class AnalysisControllerTest {
 
         @Test
         void listsPagedHistory() throws Exception {
-                when(service.search("example", 2)).thenReturn(
+                when(service.search("example", 2, "all", "recent", "", "")).thenReturn(
                                 new AnalysisRepository.AnalysisPage(List.of(), 2, 20, 0));
                 mockMvc.perform(get("/api/analyses/history").param("q", "example").param("page", "2"))
                                 .andExpect(status().isOk())

@@ -130,4 +130,47 @@ class AnalysisPersistenceTest {
                                 .andExpect(jsonPath("$.total").value(21))
                                 .andExpect(jsonPath("$.items.length()").value(1));
         }
+
+        @Test
+        void filtersAndSortsHistoryWithStablePagination() throws Exception {
+                String[] dates = {"2026-11-10T12:00:00Z", "2026-11-11T12:00:00Z",
+                                "2026-11-12T12:00:00Z", "2026-11-12T13:00:00Z"};
+                int[] counts = {0, 3, 1, 0};
+                for (int index = 0; index < dates.length; index++) {
+                        var result = mapper.createObjectNode();
+                        result.put("url", "https://example.com/" + index);
+                        result.put("title", "Página " + index);
+                        result.put("analyzedAt", dates[index]);
+                        var issues = result.putArray("issues");
+                        for (int issue = 0; issue < counts[index]; issue++) issues.addObject();
+                        result.put("needsManualReview", 0);
+                        result.put("checkedRules", 1);
+                        repository.save(UUID.randomUUID(), result);
+                }
+
+                mockMvc.perform(get("/api/analyses/history").param("issues", "with")
+                                .param("sort", "most").param("from", "2026-11-11")
+                                .param("to", "2026-11-12"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.total").value(2))
+                                .andExpect(jsonPath("$.items[0].issueCount").value(3))
+                                .andExpect(jsonPath("$.items[1].issueCount").value(1));
+                mockMvc.perform(get("/api/analyses/history").param("issues", "without")
+                                .param("sort", "oldest"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.total").value(2))
+                                .andExpect(jsonPath("$.items[0].url").value("https://example.com/0"));
+                mockMvc.perform(get("/api/analyses/history").param("q", "example.com/1")
+                                .param("issues", "without"))
+                                .andExpect(jsonPath("$.total").value(0));
+                mockMvc.perform(get("/api/analyses/history").param("sort", "random"))
+                                .andExpect(status().isBadRequest());
+                mockMvc.perform(get("/api/analyses/history").param("issues", "unknown"))
+                                .andExpect(status().isBadRequest());
+                mockMvc.perform(get("/api/analyses/history").param("from", "2026-11-13")
+                                .param("to", "2026-11-12"))
+                                .andExpect(status().isBadRequest());
+                mockMvc.perform(get("/api/analyses/history").param("from", "not-a-date"))
+                                .andExpect(status().isBadRequest());
+        }
 }
