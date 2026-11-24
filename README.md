@@ -4,7 +4,7 @@ O ClearAccess analisa a acessibilidade de páginas públicas e apresenta os prob
 
 ## Estado atual
 
-A interface React recebe a URL, mostra o andamento e apresenta o relatório com contagens, filtros por impacto, busca e detalhes de cada problema. Ela busca e pagina o histórico, abre relatórios salvos por link, mostra as ocorrências novas e resolvidas em relação à execução anterior do mesmo endereço e exporta relatórios em JSON ou CSV. A API Spring Boot recebe a URL em `POST /api/analyses`. Um worker Node abre a página com Chromium, executa o axe-core e devolve os problemas encontrados. Cada análise bem-sucedida é salva no PostgreSQL. A análise é síncrona e tem limite de 60 segundos. O endpoint `GET /api/health` verifica a conexão com o banco e retorna HTTP 503 quando ela falha.
+A interface React recebe a URL, mostra o andamento e apresenta o relatório com contagens, filtros por impacto, busca e detalhes de cada problema. Ela busca, filtra, ordena e pagina o histórico, abre relatórios salvos por link, mostra as ocorrências novas e resolvidas em relação à execução anterior do mesmo endereço e exporta relatórios em JSON ou CSV. A API Spring Boot recebe a URL em `POST /api/analyses`. Um worker Node abre a página com Chromium, executa o axe-core e devolve os problemas encontrados. Cada análise bem-sucedida é salva no PostgreSQL. A análise é síncrona e tem limite de 60 segundos. O endpoint `GET /api/health` verifica a conexão com o banco e retorna HTTP 503 quando ela falha.
 
 As regras do axe-core são apresentadas em português. A análise automatizada não substitui uma revisão manual de acessibilidade.
 
@@ -71,12 +71,13 @@ Uma análise bem-sucedida recebe HTTP 201, cabeçalho `Location` e corpo com `id
 ```bash
 curl http://localhost:8080/api/analyses
 curl 'http://localhost:8080/api/analyses/history?q=exemplo&page=0'
+curl 'http://localhost:8080/api/analyses/history?issues=with&sort=most&from=2026-11-01&to=2026-11-30'
 curl http://localhost:8080/api/analyses/SEU-ID-AQUI
 curl http://localhost:8080/api/analyses/SEU-ID-AQUI/previous
 curl http://localhost:8080/api/analyses/SEU-ID-AQUI/timeline
 ```
 
-A lista simples retorna até 20 resumos, do mais recente ao mais antigo. `/history` retorna páginas de 20 resumos em `items`, com `page`, `size` e `total`. O parâmetro `q` busca sem diferenciar maiúsculas e minúsculas no título e na URL; `page` começa em zero. A consulta por ID devolve o relatório completo ou HTTP 404. O endpoint `/previous` devolve o relatório anterior da mesma URL final, HTTP 204 quando não existe anterior e HTTP 404 para um ID inexistente. Na interface, `?analysis=SEU-ID-AQUI` abre um relatório salvo diretamente. A comparação considera a combinação de regra e seletor de cada ocorrência; mudanças nessa combinação aparecem como ocorrência resolvida e nova.
+A lista simples retorna até 20 resumos, do mais recente ao mais antigo. `/history` retorna páginas de 20 resumos em `items`, com `page`, `size` e `total`. O parâmetro `q` busca sem diferenciar maiúsculas e minúsculas no título e na URL; `page` começa em zero. `issues` aceita `all` (padrão), `with` ou `without`. `sort` aceita `recent` (padrão), `oldest`, `most` ou `fewest`; empates usam data e ID para manter a ordem estável. `from` e `to` aceitam datas `AAAA-MM-DD`, inclusivas, em UTC. Filtros inválidos ou período invertido retornam HTTP 400. A consulta por ID devolve o relatório completo ou HTTP 404. O endpoint `/previous` devolve o relatório anterior da mesma URL final, HTTP 204 quando não existe anterior e HTTP 404 para um ID inexistente. Na interface, `?analysis=SEU-ID-AQUI` abre um relatório salvo diretamente. A comparação considera a combinação de regra e seletor de cada ocorrência; mudanças nessa combinação aparecem como ocorrência resolvida e nova.
 
 `/timeline` retorna até dez resumos da mesma URL, da análise selecionada para trás, ou HTTP 404 se o ID não existir. A interface mostra a evolução da contagem de ocorrências e permite abrir cada execução. Também é possível baixar a comparação de ocorrências novas e resolvidas em CSV. O worker interrompe análises que ultrapassem 500 requisições de rede.
 
@@ -97,7 +98,7 @@ O worker bloqueia destinos locais e endereços reservados, inclusive em redireci
 ## Próximos incrementos
 
 1. Preparação de uma implantação com isolamento de rede para o navegador.
-2. Filtros adicionais e ordenação no histórico.
-3. Filtros por período e impacto para acompanhar tendências entre várias análises.
+2. Filtros por impacto para acompanhar tendências entre várias análises.
+3. Visão agregada de tendências entre páginas e períodos.
 
 A primeira versão não depende de IA ou de ferramentas pagas.
