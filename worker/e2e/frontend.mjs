@@ -35,7 +35,16 @@ test("abre histórico, compara relatórios e respeita navegação do navegador",
     let body;
     if (path === "/api/analyses/history") {
       const q = requestUrl.searchParams.get("q")?.toLowerCase() ?? "";
-      const items = summaries.filter((item) => `${item.title} ${item.url}`.toLowerCase().includes(q));
+      const issues = requestUrl.searchParams.get("issues") ?? "all";
+      const sort = requestUrl.searchParams.get("sort") ?? "recent";
+      const items = summaries.filter((item) => `${item.title} ${item.url}`.toLowerCase().includes(q))
+        .filter((item) => issues === "all" || (issues === "with" ? item.issueCount > 0 : item.issueCount === 0))
+        .filter((item) => !requestUrl.searchParams.get("from") || item.analyzedAt.slice(0, 10) >= requestUrl.searchParams.get("from"))
+        .filter((item) => !requestUrl.searchParams.get("to") || item.analyzedAt.slice(0, 10) <= requestUrl.searchParams.get("to"))
+        .sort((a, b) => sort === "oldest" ? a.analyzedAt.localeCompare(b.analyzedAt)
+          : sort === "fewest" ? a.issueCount - b.issueCount
+          : sort === "most" ? b.issueCount - a.issueCount
+          : b.analyzedAt.localeCompare(a.analyzedAt));
       body = { items, page: Number(requestUrl.searchParams.get("page") ?? 0), size: 20, total: items.length };
     }
     else if (path === "/api/analyses") body = summaries;
@@ -53,9 +62,17 @@ test("abre histórico, compara relatórios e respeita navegação do navegador",
 
   await page.goto(baseUrl);
   await page.getByLabel("Buscar no histórico").fill("não existe");
-  await page.getByText("Nenhuma análise corresponde à busca.").waitFor();
+  await page.getByText("Nenhuma análise corresponde aos filtros.").waitFor();
   await page.getByLabel("Buscar no histórico").fill("");
   await page.locator(".history-item").first().waitFor();
+  await page.locator(".history-controls select").first().selectOption("without");
+  await page.getByText("Nenhuma análise corresponde aos filtros.").waitFor();
+  await page.getByRole("button", { name: "Limpar filtros" }).click();
+  await page.locator(".history-item").first().getByText(/11 de nov/).waitFor();
+  await page.getByLabel("Ordenar por").selectOption("oldest");
+  await page.locator(".history-item").first().getByText(/10 de nov/).waitFor();
+  await page.getByRole("button", { name: "Limpar filtros" }).click();
+  await page.locator(".history-item").first().getByText(/11 de nov/).waitFor();
   if (process.env.CLEARACCESS_VISUAL_OUTPUT) {
     await page.locator(".history-item").first().waitFor();
     await page.screenshot({ path: `${process.env.CLEARACCESS_VISUAL_OUTPUT}/first-run-desktop.png`, fullPage: true });
